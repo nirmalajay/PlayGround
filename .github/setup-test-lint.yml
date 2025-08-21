@@ -8,8 +8,8 @@ name: Set up, test, lint, and clean up
 # See: https://docs.github.com/en/enterprise-server@3.7/actions/using-workflows/events-that-trigger-workflows
 on:
     workflow_call:
-        # Define inputs that are passed to this workflow from the caller workflow
-        # See: https://docs.github.com/en/enterprise-server@3.7/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callinputs
+        # Define inputs that are passed to this workflow from the caller workflow 
+        # See: https://docs.github.com/en/enterprise-server@3.7/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callinputs testing
         inputs:
             package_name:
                 description: "Name of the package used"

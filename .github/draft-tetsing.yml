@@ -1,0 +1,14 @@
+name: Test Draft PR Condition
+
+on:
+  pull_request:
+
+jobs:
+  check-draft:
+    if: github.event.pull_request.draft == false
+    runs-on: ubuntu-latest
+    steps:
+      - name: Show Draft Flag
+        run: echo "Draft status is ${{ github.event.pull_request.draft }}"
+
+
