@@ -1,0 +1,86 @@
+
+# This GitHub action builds an image from the specified MATLAB-based Dockerfile, runs a container,
+# tests and lints the package, and stops and removes the container.
+# This GitHub action mimicks the behavior of the script 'setup/scripts/setup_test_lint_cleanup.sh'.
+name: Set up, test, lint, and clean up
+
+# Workflow runs when it is called from another workflow.
+# See: https://docs.github.com/en/enterprise-server@3.7/actions/using-workflows/events-that-trigger-workflows
+on:
+    workflow_call:
+        # Define inputs that are passed to this workflow from the caller workflow
+        # See: https://docs.github.com/en/enterprise-server@3.7/actions/using-workflows/workflow-syntax-for-github-actions#onworkflow_callinputs
+        inputs:
+            package_name:
+                description: "Name of the package used"
+                required: true
+                type: string
+
+jobs:
+    # Name of this job
+    setup_test_lint_cleanup:
+        # Type of runner that this job will run on (runner must match all labels)
+        runs-on: [self-hosted, docker, ubuntu]
+
+        # Automatically end this job if it takes longer than 60 minutes
+        timeout-minutes: 60
+
+        # Docker container
+        container:
+            image: artifactory.boschdevcloud.com/top105-docker-local/${{ inputs.package_name }}:latest
+            credentials:
+                username: ${{ vars.ARTIFACTORY_RESOURCE_USER }}
+                password: ${{ secrets.ARTIFACTORY_RESOURCE_TOKEN }}
+
+        # Environment variable
+        env:
+            POETRY_PATH: "/root/.local/bin"
+
+        # Steps that are executed
+        steps:
+            # Ensure the files and folders are owned by the non-root user to maintain proper permissions within the Docker container.
+            # Since our Docker container runs as a non-root user, use `sudo` to run commands that require elevated permissions.
+            - name: Set file ownership to non-root user
+              run: sudo chown -R top105user:top105user $GITHUB_WORKSPACE
+
+            # See: https://github.com/actions/runner/issues/434#issuecomment-992865457
+            - name: Clean up workspace
+              run: rm -rf $GITHUB_WORKSPACE/*
+
+            - name: Fix git checkout, i.e., disable safe repository checks in Docker container
+              run: git config --global --add safe.directory "*"
+
+            - name: Check out code
+              uses: actions/checkout@v4
+              with:
+                  submodules: recursive
+                  token: ${{ secrets.GHE_RESOURCE_CLONE_TOKEN }}
+
+            - name: Set up development environment
+              run: |
+                  sudo env PATH="$POETRY_PATH:$PATH" \
+                    LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
+                    ARTIFACTORY_RESOURCE_USER=${{ vars.ARTIFACTORY_RESOURCE_USER }} \
+                    ARTIFACTORY_RESOURCE_TOKEN=${{ secrets.ARTIFACTORY_RESOURCE_TOKEN }} \
+                    bash setup/scripts/setup_development_environment.sh
+
+            - name: Test package, as specified in 'Makefile'
+              run: |
+                  sudo env PATH="$POETRY_PATH:$PATH" \
+                    LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
+                    ACADOS_SOURCE_DIR="$ACADOS_SOURCE_DIR" \
+                    make test
+
+            - name: Lint package, as specified in 'Makefile'
+              run: |
+                  sudo env PATH="$POETRY_PATH:$PATH" \
+                    LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
+                    ACADOS_SOURCE_DIR="$ACADOS_SOURCE_DIR" \
+                    make lint
+
+            - name: Test conversion of examples to Jupyter notebooks, as specified in 'Makefile'
+              run: |
+                  sudo env PATH="$POETRY_PATH:$PATH" \
+                    LD_LIBRARY_PATH="$LD_LIBRARY_PATH" \
+                    ACADOS_SOURCE_DIR="$ACADOS_SOURCE_DIR" \
+                    make test-docs-examples
